@@ -3,7 +3,7 @@
     "ab_suffixes": ["-0", "-1"],
     "disk_size": 16106127360,
     "disk_alignment": 512,
-    "disk_guid": "01234567-89ab-cdef-0123-000000000008"
+    "disk_guid": "01234567-89ab-cdef-0123-000000000000"
   },
   "partitions": [
     {
@@ -16,7 +16,8 @@
       "flags": "0x0000000000000000",
       "ignore": false,
       "ab": true,
-      "ab_expanded": true
+      "ab_expanded": true,
+      "position": 0
     },
     {
       "label": "boot-1",
@@ -28,7 +29,8 @@
       "flags": "0x0000000000000000",
       "ignore": false,
       "ab": true,
-      "ab_expanded": true
+      "ab_expanded": true,
+      "position": 0
     },
     {
       "label": "system-0",
@@ -40,7 +42,8 @@
       "flags": "0x0000000000000000",
       "ignore": false,
       "ab": true,
-      "ab_expanded": true
+      "ab_expanded": true,
+      "position": 0
     },
     {
       "label": "system-1",
@@ -52,7 +55,8 @@
       "flags": "0x0000000000000000",
       "ignore": false,
       "ab": true,
-      "ab_expanded": true
+      "ab_expanded": true,
+      "position": 0
     },
     {
       "label": "odm-0",
@@ -64,7 +68,8 @@
       "flags": "0x0000000000000000",
       "ignore": false,
       "ab": true,
-      "ab_expanded": true
+      "ab_expanded": true,
+      "position": 0
     },
     {
       "label": "odm-1",
@@ -76,7 +81,8 @@
       "flags": "0x0000000000000000",
       "ignore": false,
       "ab": true,
-      "ab_expanded": true
+      "ab_expanded": true,
+      "position": 0
     },
     {
       "label": "userdata",
@@ -88,7 +94,8 @@
       "flags": "0x0000000000000000",
       "ignore": false,
       "ab": false,
-      "ab_expanded": false
+      "ab_expanded": false,
+      "position": 0
     }
   ]
 }

@@ -46,6 +46,7 @@ JSON_KEYWORD_PARTITIONS_FLAGS = 'flags'
 JSON_KEYWORD_PARTITIONS_IGNORE = 'ignore'
 JSON_KEYWORD_PARTITIONS_AB = 'ab'
 JSON_KEYWORD_PARTITIONS_AB_EXPANDED = 'ab_expanded'
+JSON_KEYWORD_PARTITIONS_POSITION = 'position'
 JSON_KEYWORD_AUTO = 'auto'
 
 # Possible values for the --type option of the query_partition
@@ -62,6 +63,9 @@ BPT_VERSION_MINOR = 0
 DISK_SECTOR_SIZE = 512
 
 GPT_NUM_LBAS = 33
+
+GPT_MIN_PART_NUM = 1
+GPT_MAX_PART_NUM = 128
 
 KNOWN_TYPE_GUIDS = {
     'brillo_boot': 'bb499290-b57e-49f6-bf41-190386693794',
@@ -196,8 +200,12 @@ class GuidGenerator(object):
   directly using the uuid module.
   """
 
-  def dispense_guid(self):
+  def dispense_guid(self, partition_number):
     """Dispenses a GUID.
+
+    Arguments:
+      partition_number: The partition number or 0 if requesting a GUID
+                        for the whole disk.
 
     Returns:
       A RFC 4122 compliant GUID, as a string.
@@ -221,6 +229,7 @@ class Partition(object):
     ab: If True, the partition is an A/B partition.
     ab_expanded: If True, the A/B partitions have been generated.
     ignore: If True, the partition should not be included in the final output.
+    position: The requested position of the partition or 0 if it doesn't matter.
   """
 
   def __init__(self):
@@ -235,6 +244,7 @@ class Partition(object):
     self.ab = False
     self.ab_expanded = False
     self.ignore = False
+    self.position = 0
 
   def add_info(self, pobj):
     """Add information to partition.
@@ -272,15 +282,21 @@ class Partition(object):
     value = pobj.get(JSON_KEYWORD_PARTITIONS_FLAGS)
     if value:
       self.flags = ParseNumber(value)
+    value = pobj.get(JSON_KEYWORD_PARTITIONS_POSITION)
+    if value:
+      self.position = ParseNumber(value)
 
-  def expand_guid(self, guid_generator):
-    """Assign instance GUID if required.
+  def expand_guid(self, guid_generator, partition_number):
+    """Assign instance GUID and type GUID if required.
 
     Arguments:
       guid_generator: A GuidGenerator object.
+      partition_number: The partition number, starting from 1.
     """
     if not self.guid or self.guid == JSON_KEYWORD_AUTO:
-      self.guid = guid_generator.dispense_guid()
+      self.guid = guid_generator.dispense_guid(partition_number)
+    if not self.type_guid:
+      self.type_guid = KNOWN_TYPE_GUIDS['brillo_vendor_specific']
 
   def validate(self):
     """Sanity checks data in object."""
@@ -302,6 +318,16 @@ class Partition(object):
     if not self.size:
       if not self.grow:
         raise ValueError('Size can only be unset if "grow" is True.')
+
+  def cmp(self, other):
+    """Comparison method."""
+    self_position = self.position
+    if self_position == 0:
+      self_position = GPT_MAX_PART_NUM
+    other_position = other.position
+    if other_position == 0:
+      other_position = GPT_MAX_PART_NUM
+    return cmp(self_position, other_position)
 
 
 class Settings(object):
@@ -402,7 +428,7 @@ class Bpt(object):
         for pobj in pobjs:
           if ab_collapse and pobj.get(JSON_KEYWORD_PARTITIONS_AB_EXPANDED):
             # If we encounter an expanded partition, unexpand it. This
-            # is make it possible to use output-JSON (from this tool)
+            # is to make it possible to use output-JSON (from this tool)
             # and stack it with an input-JSON file that e.g. specifies
             # size='256 GiB' for the 'system' partition.
             label = pobj[JSON_KEYWORD_PARTITIONS_LABEL]
@@ -470,7 +496,8 @@ class Bpt(object):
               '      "' + JSON_KEYWORD_PARTITIONS_FLAGS + '": "{:#018x}",\n'
               '      "' + JSON_KEYWORD_PARTITIONS_IGNORE + '": {},\n'
               '      "' + JSON_KEYWORD_PARTITIONS_AB + '": {},\n'
-              '      "' + JSON_KEYWORD_PARTITIONS_AB_EXPANDED + '": {}\n'
+              '      "' + JSON_KEYWORD_PARTITIONS_AB_EXPANDED + '": {},\n'
+              '      "' + JSON_KEYWORD_PARTITIONS_POSITION + '": {}\n'
               '    }}{}\n').format(p.label,
                                    p.offset,
                                    p.size,
@@ -481,6 +508,7 @@ class Bpt(object):
                                    'true' if p.ignore else 'false',
                                    'true' if p.ab else 'false',
                                    'true' if p.ab_expanded else 'false',
+                                   p.position,
                                    '' if n == len(partitions) - 1 else ',')
     ret += ('  ]\n'
             '}\n')
@@ -724,15 +752,20 @@ class Bpt(object):
         expanded_partitions.append(p)
     partitions = expanded_partitions
 
-    # Automatically generate GUIDs if the GUID is unset or set to
-    # 'auto'. Also validate the rest of the fields.
-    for p in partitions:
-      p.expand_guid(guid_generator)
-      p.validate()
-
     # Expand Disk GUID if needed.
     if not settings.disk_guid or settings.disk_guid == JSON_KEYWORD_AUTO:
-      settings.disk_guid = guid_generator.dispense_guid()
+      settings.disk_guid = guid_generator.dispense_guid(0)
+
+    # Sort according to 'position' attribute.
+    partitions = sorted(partitions, cmp=lambda x, y: x.cmp(y))
+
+    # Automatically generate GUIDs if the GUID is unset or set to
+    # 'auto'. Also validate the rest of the fields.
+    part_no = 1
+    for p in partitions:
+      p.expand_guid(guid_generator, part_no)
+      p.validate()
+      part_no += 1
 
     # Idenfify partition to grow and lay out partitions, ignoring the
     # one to grow. This way we can figure out how much space is left.

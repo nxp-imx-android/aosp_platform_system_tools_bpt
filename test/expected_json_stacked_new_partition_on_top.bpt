@@ -3,7 +3,7 @@
     "ab_suffixes": ["_a", "_b"],
     "disk_size": 10737418240,
     "disk_alignment": 4096,
-    "disk_guid": "01234567-89ab-cdef-0123-000000000008"
+    "disk_guid": "01234567-89ab-cdef-0123-000000000000"
   },
   "partitions": [
     {
@@ -16,7 +16,8 @@
       "flags": "0x0000000000000000",
       "ignore": false,
       "ab": true,
-      "ab_expanded": true
+      "ab_expanded": true,
+      "position": 0
     },
     {
       "label": "boot_b",
@@ -28,7 +29,8 @@
       "flags": "0x0000000000000000",
       "ignore": false,
       "ab": true,
-      "ab_expanded": true
+      "ab_expanded": true,
+      "position": 0
     },
     {
       "label": "system_a",
@@ -40,7 +42,8 @@
       "flags": "0x0000000000000000",
       "ignore": false,
       "ab": true,
-      "ab_expanded": true
+      "ab_expanded": true,
+      "position": 0
     },
     {
       "label": "system_b",
@@ -52,7 +55,8 @@
       "flags": "0x0000000000000000",
       "ignore": false,
       "ab": true,
-      "ab_expanded": true
+      "ab_expanded": true,
+      "position": 0
     },
     {
       "label": "odm_a",
@@ -64,7 +68,8 @@
       "flags": "0x0000000000000000",
       "ignore": false,
       "ab": true,
-      "ab_expanded": true
+      "ab_expanded": true,
+      "position": 0
     },
     {
       "label": "odm_b",
@@ -76,7 +81,8 @@
       "flags": "0x0000000000000000",
       "ignore": false,
       "ab": true,
-      "ab_expanded": true
+      "ab_expanded": true,
+      "position": 0
     },
     {
       "label": "userdata",
@@ -88,19 +94,21 @@
       "flags": "0x0000000000000000",
       "ignore": false,
       "ab": false,
-      "ab_expanded": false
+      "ab_expanded": false,
+      "position": 0
     },
     {
       "label": "my_partition_on_top_of_json",
       "offset": 9663655936,
       "size": 1073741824,
       "grow": false,
-      "guid": "01234567-89ab-cdef-0123-000000000007",
+      "guid": "01234567-89ab-cdef-0123-000000000008",
       "type_guid": "0fc63daf-8483-4772-8e79-3d69d8477de4",
       "flags": "0x0000000000000000",
       "ignore": false,
       "ab": false,
-      "ab_expanded": false
+      "ab_expanded": false,
+      "position": 0
     }
   ]
 }

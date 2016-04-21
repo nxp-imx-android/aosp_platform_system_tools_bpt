@@ -100,7 +100,8 @@ well-known key/value pairs:
                 linux_fs
                 ms_basic_data
 
-              for well-known GPT partition GUIDs.
+              for well-known GPT partition GUIDs. If unset, the value
+              'brillo_vendor_specific' is used.
 
  flags:       A 64-bit integer (decimal or hexadecimal representations are
               accepted) for GPT flags. Default value is 0.
@@ -113,6 +114,12 @@ well-known key/value pairs:
 
  ab_expanded: Set to 'true' only if this partition has already been
               expanded for A/B. Default value is 'false'.
+
+ position:    The position for the partition, used to determine the sequence
+              of partitions (and, indirectly, partition numbers) or 0 if
+              position doesn't matter. Partitions with low 'position'
+              numbers will be laid out before partitions with high
+              'position' numbers. Default value is 0.
 
 For key/value-pairs involving sizes, either integers can be used, e.g.
 

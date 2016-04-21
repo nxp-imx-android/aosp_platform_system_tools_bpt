@@ -33,19 +33,10 @@ class FakeGuidGenerator(object):
   is generating random GUIDs as per RFC 4122.
   """
 
-  def __init__(self):
-    """Initializes the object."""
-    self._number = 1
-
-  def reset(self):
-    """Resets the generator to its starting state."""
-    self._number = 1
-
-  def dispense_guid(self):
+  def dispense_guid(self, partition_number):
     """Dispenses a new GUID."""
 
-    uuid = '01234567-89ab-cdef-0123-%012x' % self._number
-    self._number += 1
+    uuid = '01234567-89ab-cdef-0123-%012x' % partition_number
     return uuid
 
 
@@ -171,7 +162,6 @@ class MakeTableTest(unittest.TestCase):
     # just generated without passing any options (e.g. disk size,
     # alignment, suffixes). This verifies that we include all
     # necessary information in the generated JSON.
-    self.fake_guid_generator.reset()
     (json_str2, _) = bpt.make_table(
         [open(expected_json_file_name, 'r')],
         guid_generator=self.fake_guid_generator)
@@ -263,6 +253,13 @@ class MakeTableTest(unittest.TestCase):
     self._MakeTable(['test/expected_json_base.bpt',
                      'test/change_system_size.bpt'],
                     'test/expected_json_stacked_change_ab_size.bpt')
+
+  def testPositionAttribute(self):
+    """Checks that it's possible to influence partition order."""
+    self._MakeTable(['test/base.bpt',
+                     'test/positions.bpt'],
+                    'test/expected_json_stacked_positions.bpt',
+                    disk_size=bpttool.ParseSize('10 GiB'))
 
   def testBinaryOutput(self):
     """Checks binary partition table output.
