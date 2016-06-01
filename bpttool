@@ -552,7 +552,7 @@ class Bpt(object):
     lba_end = settings.disk_size/DISK_SECTOR_SIZE - 1
     start_chs = self._lba_to_chs(lba_start)
     end_chs = self._lba_to_chs(lba_end)
-    pmbr = struct.pack('<446x'     # Padding to get to offset 446 (0x1be).
+    pmbr = struct.pack('<446s'     # Bootloader code
                        'B'         # Status.
                        'BBB'       # CHS start.
                        'B'         # Partition type.
@@ -561,6 +561,7 @@ class Bpt(object):
                        'I'         # Number of sectors in partition.
                        '48x'       # Padding to get to offset 510 (0x1fe).
                        'BB',       # Boot signature.
+                       '\xfa\xeb\xfe', # cli ; jmp $ (x86)
                        0x00,
                        start_chs[0], start_chs[1], start_chs[2],
                        0xee,       # MBR Partition Type: GPT protective MBR.
