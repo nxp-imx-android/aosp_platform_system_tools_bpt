@@ -5,27 +5,31 @@
             "label": "boot",
             "size": "32 MiB",
             "guid": "auto",
-            "type_guid": "brillo_boot"
+            "type_guid": "brillo_boot",
+            "rpi_boot": false
         },
         {
             "ab": true,
             "label": "system",
             "size": "512 MiB",
             "guid": "auto",
-            "type_guid": "brillo_system"
+            "type_guid": "brillo_system",
+            "rpi_boot": false
         },
         {
             "ab": true,
             "label": "odm",
             "size": "1 GiB",
             "guid": "auto",
-            "type_guid": "brillo_odm"
+            "type_guid": "brillo_odm",
+            "rpi_boot": false
         },
         {
             "label": "userdata",
             "grow": true,
             "guid": "auto",
-            "type_guid": "brillo_userdata"
+            "type_guid": "brillo_userdata",
+            "rpi_boot": false
         }
     ]
 }
