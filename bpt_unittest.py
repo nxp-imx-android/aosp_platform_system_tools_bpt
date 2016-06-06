@@ -271,16 +271,6 @@ class MakeTableTest(unittest.TestCase):
                     'test/expected_json_stacked_change_flags.bpt',
                     'test/expected_json_stacked_change_flags.bin')
 
-  def testRpiTables(self):
-    """Checks binary partition table output for Raspberry Pi.
-
-    This verifies that we generate the binary partition tables
-    correctly when we have a Raspberry Pi boot partition.
-    """
-    self._MakeTable(['test/rpi_boot.bpt'],
-                    'test/expected_rpi_boot_partitions.bpt',
-                    'test/expected_rpi_boot_partitions.bin')
-
   def testFileWithSyntaxErrors(self):
     """Check that we catch errors in JSON files in a structured way."""
     try:

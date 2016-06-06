@@ -17,8 +17,7 @@
       "ignore": false,
       "ab": false,
       "ab_expanded": false,
-      "position": 1,
-      "rpi_boot": false
+      "position": 1
     },
     {
       "label": "my_data_2",
@@ -31,8 +30,7 @@
       "ignore": false,
       "ab": false,
       "ab_expanded": false,
-      "position": 2,
-      "rpi_boot": false
+      "position": 2
     },
     {
       "label": "system_a",
@@ -45,8 +43,7 @@
       "ignore": false,
       "ab": true,
       "ab_expanded": true,
-      "position": 3,
-      "rpi_boot": false
+      "position": 3
     },
     {
       "label": "system_b",
@@ -59,8 +56,7 @@
       "ignore": false,
       "ab": true,
       "ab_expanded": true,
-      "position": 3,
-      "rpi_boot": false
+      "position": 3
     },
     {
       "label": "my_data_3",
@@ -73,8 +69,7 @@
       "ignore": false,
       "ab": false,
       "ab_expanded": false,
-      "position": 4,
-      "rpi_boot": false
+      "position": 4
     },
     {
       "label": "boot_a",
@@ -87,8 +82,7 @@
       "ignore": false,
       "ab": true,
       "ab_expanded": true,
-      "position": 0,
-      "rpi_boot": false
+      "position": 0
     },
     {
       "label": "boot_b",
@@ -101,8 +95,7 @@
       "ignore": false,
       "ab": true,
       "ab_expanded": true,
-      "position": 0,
-      "rpi_boot": false
+      "position": 0
     },
     {
       "label": "odm_a",
@@ -115,8 +108,7 @@
       "ignore": false,
       "ab": true,
       "ab_expanded": true,
-      "position": 0,
-      "rpi_boot": false
+      "position": 0
     },
     {
       "label": "odm_b",
@@ -129,8 +121,7 @@
       "ignore": false,
       "ab": true,
       "ab_expanded": true,
-      "position": 0,
-      "rpi_boot": false
+      "position": 0
     },
     {
       "label": "userdata",
@@ -143,8 +134,7 @@
       "ignore": false,
       "ab": false,
       "ab_expanded": false,
-      "position": 0,
-      "rpi_boot": false
+      "position": 0
     }
   ]
 }
