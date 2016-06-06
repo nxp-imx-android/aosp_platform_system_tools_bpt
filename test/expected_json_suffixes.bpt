@@ -17,7 +17,8 @@
       "ignore": false,
       "ab": true,
       "ab_expanded": true,
-      "position": 0
+      "position": 0,
+      "rpi_boot": false
     },
     {
       "label": "boot-B",
@@ -30,7 +31,8 @@
       "ignore": false,
       "ab": true,
       "ab_expanded": true,
-      "position": 0
+      "position": 0,
+      "rpi_boot": false
     },
     {
       "label": "system-A",
@@ -43,7 +45,8 @@
       "ignore": false,
       "ab": true,
       "ab_expanded": true,
-      "position": 0
+      "position": 0,
+      "rpi_boot": false
     },
     {
       "label": "system-B",
@@ -56,7 +59,8 @@
       "ignore": false,
       "ab": true,
       "ab_expanded": true,
-      "position": 0
+      "position": 0,
+      "rpi_boot": false
     },
     {
       "label": "odm-A",
@@ -69,7 +73,8 @@
       "ignore": false,
       "ab": true,
       "ab_expanded": true,
-      "position": 0
+      "position": 0,
+      "rpi_boot": false
     },
     {
       "label": "odm-B",
@@ -82,7 +87,8 @@
       "ignore": false,
       "ab": true,
       "ab_expanded": true,
-      "position": 0
+      "position": 0,
+      "rpi_boot": false
     },
     {
       "label": "userdata",
@@ -95,7 +101,8 @@
       "ignore": false,
       "ab": false,
       "ab_expanded": false,
-      "position": 0
+      "position": 0,
+      "rpi_boot": false
     }
   ]
 }
