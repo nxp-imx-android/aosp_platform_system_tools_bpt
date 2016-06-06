@@ -17,8 +17,7 @@
       "ignore": false,
       "ab": true,
       "ab_expanded": true,
-      "position": 0,
-      "rpi_boot": false
+      "position": 0
     },
     {
       "label": "boot_b",
@@ -31,8 +30,7 @@
       "ignore": false,
       "ab": true,
       "ab_expanded": true,
-      "position": 0,
-      "rpi_boot": false
+      "position": 0
     },
     {
       "label": "system_a",
@@ -45,8 +43,7 @@
       "ignore": false,
       "ab": true,
       "ab_expanded": true,
-      "position": 0,
-      "rpi_boot": false
+      "position": 0
     },
     {
       "label": "system_b",
@@ -59,8 +56,7 @@
       "ignore": false,
       "ab": true,
       "ab_expanded": true,
-      "position": 0,
-      "rpi_boot": false
+      "position": 0
     },
     {
       "label": "odm_a",
@@ -73,8 +69,7 @@
       "ignore": false,
       "ab": true,
       "ab_expanded": true,
-      "position": 0,
-      "rpi_boot": false
+      "position": 0
     },
     {
       "label": "odm_b",
@@ -87,8 +82,7 @@
       "ignore": false,
       "ab": true,
       "ab_expanded": true,
-      "position": 0,
-      "rpi_boot": false
+      "position": 0
     },
     {
       "label": "userdata",
@@ -101,8 +95,7 @@
       "ignore": false,
       "ab": false,
       "ab_expanded": false,
-      "position": 0,
-      "rpi_boot": false
+      "position": 0
     },
     {
       "label": "my_data_partition",
@@ -115,8 +108,7 @@
       "ignore": false,
       "ab": false,
       "ab_expanded": false,
-      "position": 0,
-      "rpi_boot": false
+      "position": 0
     }
   ]
 }

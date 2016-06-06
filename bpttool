@@ -47,7 +47,6 @@ JSON_KEYWORD_PARTITIONS_IGNORE = 'ignore'
 JSON_KEYWORD_PARTITIONS_AB = 'ab'
 JSON_KEYWORD_PARTITIONS_AB_EXPANDED = 'ab_expanded'
 JSON_KEYWORD_PARTITIONS_POSITION = 'position'
-JSON_KEYWORD_PARTITIONS_RPIBOOT = 'rpi_boot'
 JSON_KEYWORD_AUTO = 'auto'
 
 # Possible values for the --type option of the query_partition
@@ -231,7 +230,6 @@ class Partition(object):
     ab_expanded: If True, the A/B partitions have been generated.
     ignore: If True, the partition should not be included in the final output.
     position: The requested position of the partition or 0 if it doesn't matter.
-    rpi_boot: Whether this is a Raspberry Pi boot partition.
   """
 
   def __init__(self):
@@ -247,7 +245,6 @@ class Partition(object):
     self.ab_expanded = False
     self.ignore = False
     self.position = 0
-    self.rpi_boot = False
 
   def add_info(self, pobj):
     """Add information to partition.
@@ -288,9 +285,6 @@ class Partition(object):
     value = pobj.get(JSON_KEYWORD_PARTITIONS_POSITION)
     if value:
       self.position = ParseNumber(value)
-    value = pobj.get(JSON_KEYWORD_PARTITIONS_RPIBOOT)
-    if value:
-      self.rpi_boot = True
 
   def expand_guid(self, guid_generator, partition_number):
     """Assign instance GUID and type GUID if required.
@@ -503,8 +497,7 @@ class Bpt(object):
               '      "' + JSON_KEYWORD_PARTITIONS_IGNORE + '": {},\n'
               '      "' + JSON_KEYWORD_PARTITIONS_AB + '": {},\n'
               '      "' + JSON_KEYWORD_PARTITIONS_AB_EXPANDED + '": {},\n'
-              '      "' + JSON_KEYWORD_PARTITIONS_POSITION + '": {},\n'
-              '      "' + JSON_KEYWORD_PARTITIONS_RPIBOOT + '": {}\n'
+              '      "' + JSON_KEYWORD_PARTITIONS_POSITION + '": {}\n'
               '    }}{}\n').format(p.label,
                                    p.offset,
                                    p.size,
@@ -516,7 +509,6 @@ class Bpt(object):
                                    'true' if p.ab else 'false',
                                    'true' if p.ab_expanded else 'false',
                                    p.position,
-                                   'true' if p.rpi_boot else 'false',
                                    '' if n == len(partitions) - 1 else ',')
     ret += ('  ]\n'
             '}\n')
@@ -544,28 +536,11 @@ class Bpt(object):
     s = lba % num_sectors
     return [h, (((c>>8) & 0x03)<<6) | (s & 0x3f), c & 0xff]
 
-  def _generate_mbr_entry(self, start_chs, end_chs, lba_start, lba_size,
-                          mbr_type):
-    return struct.pack('<B'        # Status.
-                       'BBB'       # CHS start.
-                       'B'         # Partition type.
-                       'BBB'       # CHS end.
-                       'I'         # LBA of partition start.
-                       'I',        # Number of sectors in partition.
-                       0x00,
-                       start_chs[0], start_chs[1], start_chs[2],
-                       mbr_type,
-                       end_chs[0], end_chs[1], end_chs[2],
-                       lba_start,
-                       lba_size)
-
-  def _generate_protective_mbr(self, settings, rpi_boot_partition=None):
+  def _generate_protective_mbr(self, settings):
     """Generate Protective MBR.
 
     Arguments:
       settings: A Settings object.
-      rpi_boot_partition: If set, a special boot partition to be mentioned
-                          in the MBR
 
     Returns:
       A string with the binary protective MBR (512 bytes).
@@ -574,35 +549,25 @@ class Bpt(object):
     #
     # The first partition starts at offset 446 (0x1be).
     lba_start = 1
-    lba_end = 1
-    if rpi_boot_partition is None:
-      lba_end = settings.disk_size/DISK_SECTOR_SIZE - 1
-    lba_size = lba_end
-
+    lba_end = settings.disk_size/DISK_SECTOR_SIZE - 1
     start_chs = self._lba_to_chs(lba_start)
     end_chs = self._lba_to_chs(lba_end)
-
-    parts = self._generate_mbr_entry(start_chs, end_chs,
-            lba_start, lba_size, 0xee)
-
-    if rpi_boot_partition:
-      boot_lba_start = rpi_boot_partition.offset
-      boot_lba_size = rpi_boot_partition.size
-      boot_lba_end = boot_lba_start + boot_lba_size - 1
-
-      boot_start_chs = self._lba_to_chs(boot_lba_start)
-      boot_end_chs = self._lba_to_chs(boot_lba_end)
-      parts = struct.pack('16s'       # The boot partition
-                          '16s',      # The GPT partition
-                          self._generate_mbr_entry(boot_start_chs, boot_end_chs,
-                              boot_lba_start, boot_lba_size, 0x06),
-                          parts)
-
     pmbr = struct.pack('<446s'     # Bootloader code
-                       '64s'       # Partition entries.
+                       'B'         # Status.
+                       'BBB'       # CHS start.
+                       'B'         # Partition type.
+                       'BBB'       # CHS end.
+                       'I'         # LBA of partition start.
+                       'I'         # Number of sectors in partition.
+                       '48x'       # Padding to get to offset 510 (0x1fe).
                        'BB',       # Boot signature.
                        '\xfa\xeb\xfe', # cli ; jmp $ (x86)
-                       parts,
+                       0x00,
+                       start_chs[0], start_chs[1], start_chs[2],
+                       0xee,       # MBR Partition Type: GPT protective MBR.
+                       end_chs[0], end_chs[1], end_chs[2],
+                       1,          # LBA start
+                       lba_end,
                        0x55, 0xaa)
     return pmbr
 
@@ -706,16 +671,7 @@ class Bpt(object):
     Returns:
       A bytearray() object.
     """
-
-    rpi_boot_partition = None
-    for partition in partitions:
-      if partition.rpi_boot:
-        if rpi_boot_partition:
-          raise BptError('More than one Raspberry Pi Boot '
-                         'partition specified.\n')
-        rpi_boot_partition = partition
-
-    protective_mbr = self._generate_protective_mbr(settings, rpi_boot_partition)
+    protective_mbr = self._generate_protective_mbr(settings)
     primary_gpt = self._generate_gpt(partitions, settings)
     secondary_gpt = self._generate_gpt(partitions, settings, primary=False)
     ret = protective_mbr + primary_gpt + secondary_gpt

@@ -121,12 +121,6 @@ well-known key/value pairs:
               numbers will be laid out before partitions with high
               'position' numbers. Default value is 0.
 
- rpi_boot:    This is a Raspberry Pi boot partition. You can have one and only
-              one such partition. Declaring it introduces several hacks into the
-              protective MBR to allow this partition to appear as a boot
-              partition to the Pi's (MBR-only) boot loader, but still present a
-              GPT partition table to the Linux kernel after boot.
-
 For key/value-pairs involving sizes, either integers can be used, e.g.
 
  "size": 1048576
