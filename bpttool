@@ -677,6 +677,31 @@ class Bpt(object):
     ret = protective_mbr + primary_gpt + secondary_gpt
     return ret
 
+  def _validate_disk_partitions(self, partitions, disk_size):
+    """Check that a list of partitions have assigned offsets and fits on a
+       disk of a given size.
+
+    This function checks partition offsets and sizes to see if they may fit on
+    a disk image.
+
+    Arguments:
+      partitions: A list of Partition objects.
+      settings: Integer size of disk image.
+
+    Raises:
+      BptError: If checked condition is not satisfied.
+    """
+    for p in partitions:
+      if not p.offset or p.offset < (GPT_NUM_LBAS + 1)*DISK_SECTOR_SIZE:
+        raise BptError('Partition with label "{}" has no offset.'
+                       .format(p.label))
+      if not p.size or p.size < 0:
+        raise BptError('Partition with label "{}" has no size.'
+                        .format(p.label))
+      if (p.offset + p.size) > (disk_size - GPT_NUM_LBAS*DISK_SECTOR_SIZE):
+        raise BptError('Partition with label "{}" exceeds the disk '
+                       'image size.'.format(p.label))
+
   def make_table(self,
                  inputs,
                  ab_suffixes=None,
@@ -798,7 +823,7 @@ class Bpt(object):
                      'totaling {} bytes.\n'.format(
                          settings.disk_size, offset))
 
-    # If we have an grow partition, it'll starts at the next
+    # If we have a grow partition, it'll starts at the next
     # available alignment offset and we can calculate its size as
     # follows.
     if grow_part:
@@ -827,6 +852,78 @@ class Bpt(object):
 
     return json_str, gpt_bin
 
+  def make_disk_image(self, output, bpt, images, allow_empty_partitions=False):
+    """Implementation of the 'make_disk_image' command.
+
+    This function takes in a list of partitions images and a bpt file
+    for the purpose of creating a raw disk image with a protective MBR,
+    primary and secondary GPT, and content for each partition as specified.
+
+    Arguments:
+      output: Output file where disk image is to be written to.
+      bpt: BPT JSON file to parse.
+      images: List of partition image paths to be combined (as specified by
+              bpt).  Each element is of the form.
+              'PARTITION_NAME:/PATH/TO/PARTITION_IMAGE'
+      allow_empty_partitions: If True, partitions defined in |bpt| need not to
+                              be present in |images|. Otherwise an exception is
+                              thrown if a partition is referenced in |bpt| but
+                              not in |images|.
+
+    Raises:
+      BptParsingError: If an image file has an error.
+      BptError: If another application-specific error occurs.
+    """
+    # Generate partition list and settings.
+    partitions, settings = self._read_json([bpt], ab_collapse=False)
+
+    # Validated partition sizes and offsets.
+    self._validate_disk_partitions(partitions, settings.disk_size)
+
+    # Sort according to 'offset' attribute.
+    partitions = sorted(partitions, cmp=lambda x, y: cmp(x.offset, y.offset))
+
+    # Create necessary tables.
+    protective_mbr = self._generate_protective_mbr(settings)
+    primary_gpt = self._generate_gpt(partitions, settings)
+    secondary_gpt = self._generate_gpt(partitions, settings, primary=False)
+
+    # Start at 0 offset for mbr and primary gpt.
+    output.seek(0)
+    output.write(protective_mbr)
+    output.write(primary_gpt)
+
+    # Create mapping of partition name to partition image file.
+    image_file_names = {}
+    try:
+      for name_path in images:
+        name, path = name_path.split(":")
+        image_file_names[name] = path
+    except ValueError as e:
+      raise BptParsingError(name_path, 'Bad image argument {}.'.format(
+                            images[i]))
+
+    # Read image and insert in correct offset.
+    for p in partitions:
+      if p.label not in image_file_names:
+        if allow_empty_partitions:
+          continue
+        else:
+          raise BptParsingError(bpt.name, 'No content specified for partition'
+                                ' with label {}'.format(p.label))
+
+      with open(image_file_names[p.label], 'rb') as partition_image:
+        output.seek(p.offset)
+        partition_blob = partition_image.read()
+        if len(partition_blob) > p.size:
+          raise BptError('Partition image content with label "{}" exceeds the '
+                         'partition size.'.format(p.label))
+        output.write(partition_blob)
+
+    # Put secondary GPT and end of disk.
+    output.seek(settings.disk_size - len(secondary_gpt))
+    output.write(secondary_gpt)
+
   def query_partition(self, input_file, part_label, query_type, ab_collapse):
     """Implementation of the 'query_partition' command.
 
@@ -849,7 +946,7 @@ class Bpt(object):
       BptError: If another application-specific error occurs
     """
 
-    partitions, _ = self._read_json([input_file], ab_collapse)
+    partitions, _ = self._read_json([input_file], 'ab_collapse')
 
     part = None
     for p in partitions:
@@ -913,6 +1010,26 @@ class BptTool(object):
                             help='Output file name for MBR/GPT/GPT file.',
                             type=argparse.FileType('w'))
     sub_parser.set_defaults(func=self.make_table)
+
+    sub_parser = subparsers.add_parser(
+        'make_disk_image',
+        help='Creates disk image for loaded with partitions.')
+    sub_parser.add_argument('--output',
+                            help='Path to image output.',
+                            type=argparse.FileType('w'),
+                            required=True)
+    sub_parser.add_argument('--input',
+                            help='Path to bpt file input.',
+                            type=argparse.FileType('r'),
+                            required=True)
+    sub_parser.add_argument('--image',
+                            help='Partition name and path to image file.',
+                            metavar='PARTITION_NAME:PATH',
+                            action='append')
+    sub_parser.add_argument('--allow_empty_partitions',
+                            help='Allow skipping partitions in bpt file.',
+                            action='store_false')
+    sub_parser.set_defaults(func=self.make_disk_image)
 
     sub_parser = subparsers.add_parser(
         'query_partition',
@@ -983,6 +1100,26 @@ class BptTool(object):
     if args.output_gpt:
       args.output_gpt.write(gpt_bin)
 
+  def make_disk_image(self, args):
+    """Implements the 'make_disk_image' sub-command."""
+    if not args.input:
+      sys.stderr.write('Option --input is required.\n')
+      sys.exit(1)
+    if not args.output:
+      sys.stderr.write('Option --ouptut is required.\n')
+      sys.exit(1)
+
+    try:
+      self.bpt.make_disk_image(args.output,
+                               args.input,
+                               args.image,
+                               args.allow_empty_partitions)
+    except BptParsingError as e:
+      sys.stderr.write('{}: Error parsing: {}\n'.format(e.filename, e.message))
+      sys.exit(1)
+    except 'BptError' as e:
+      sys.stderr.write('{}\n'.format(e.message))
+      sys.exit(1)
 
 if __name__ == '__main__':
   tool = BptTool()

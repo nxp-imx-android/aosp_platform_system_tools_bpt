@@ -129,7 +129,7 @@ means 1 mebibyte. Strings with base-10 units (kB, MB, GB, TB, PB) and
 base-2 units (KiB, MiB, GiB, TiB, PiB) are also supported. For
 example:
 
- "size": "1 Mib"
+ "size": "1 MiB"
 
 means 1,048,576 bytes and
 
@@ -190,6 +190,30 @@ expanded again. This allows for setups as the following:
 where if prev_output.bpt contained the partitions "system_a",
 "system_b" (for the default A/B suffixes) then new_output.bpt would
 contain partitions "system-A", "system-B", and "system-C".
+
+-- DISK IMAGE GENERATION
+
+Disk images may be created given an unfolded .bpt file. 'bpttool
+make_disk_image' generates the output disk image file.
+
+To generate a disk image, use the following subcommand:
+
+  $ bpttool make_disk_image \
+      --output disk-image.bin \
+      --input /path/to/bpt-file.bpt \
+      --image system_a:/path/to/system.img \
+      --image boot_a:/path/to/boot.img \
+      [...]
+
+where the 'output' argument specifies the name and location of the outputted
+disk image and the 'input' argument is the .bpt file containing valid labels and
+offsets for each partition.  The 'image' argument specifies a mapping  from
+partition name/label to the path of the corresponding image partition image.
+All partitions specified in the .bpt file must be passed in via the 'image'
+argument.
+
+Typically, each of the 'image' argument files are located in the
+ANDROID_PRODUCT_OUT directory after a build is complete.
 
 -- BUILD SYSTEM INTEGRATION NOTES
 
