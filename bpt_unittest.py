@@ -20,6 +20,7 @@
 
 import imp
 import sys
+import tempfile
 import unittest
 
 sys.dont_write_bytecode = True
@@ -39,6 +40,17 @@ class FakeGuidGenerator(object):
     uuid = '01234567-89ab-cdef-0123-%012x' % partition_number
     return uuid
 
+class PatternPartition(object):
+  """A partition image file containing a predictable pattern.
+
+  This holds file data about a partition image file for binary pattern.
+  testing.
+  """
+  def __init__(self, char='', file=None, partition_name=None, obj=None):
+    self.char = char
+    self.file = file
+    self.partition_name = partition_name
+    self.obj = obj
 
 class RoundToMultipleTest(unittest.TestCase):
   """Unit tests for the RoundToMultiple() function."""
@@ -110,6 +122,108 @@ class ParseSizeTest(unittest.TestCase):
     self.assertEqual(bpttool.ParseSize('0.5 GB'), 500000000)
     self.assertEqual(bpttool.ParseSize('0.5 GiB'), 536870912)
     self.assertEqual(bpttool.ParseSize('0.1 MiB'), 104858)
+
+class MakeDiskImageTest(unittest.TestCase):
+  """Unit tests for 'bpttool make_disk_image'."""
+
+  def setUp(self):
+    """Set-up method."""
+    self.bpt = bpttool.Bpt()
+
+  def _BinaryPattern(self, bpt_file_name, partition_patterns):
+    """Checks that a binary pattern may be written to a specified partition.
+
+    This checks individual partion image writes to portions of a disk.  Known
+    patterns are written into certain partitions and are verified after each
+    pattern has been written to.
+
+    Arguments:
+      bpt_file_name: File name of bpt JSON containing partition information.
+      partition_patterns: List of tuples with each tuple having partition name
+                          as the first argument, and character pattern as the
+                          second argument.
+
+    """
+    bpt_file = open(bpt_file_name, 'r')
+    partitions_string, _ = self.bpt.make_table([bpt_file])
+    bpt_tmp = tempfile.NamedTemporaryFile()
+    bpt_tmp.write(partitions_string)
+    bpt_tmp.seek(0)
+    partitions, _ = self.bpt._read_json([bpt_tmp])
+
+    # Declare list of partition images to be written and compared on disk.
+    pattern_images = [PatternPartition(
+                      char=pp[1],
+                      file=tempfile.NamedTemporaryFile(),
+                      partition_name=pp[0])
+                      for pp in partition_patterns]
+
+    # Store partition object and write a known character pattern image.
+    for pi in pattern_images:
+      pi.obj = [p for p in partitions if str(p.label) == pi.partition_name][0]
+      pi.file.write(bytearray(pi.char * int(pi.obj.size)))
+
+    # Create the disk containing the partition filled with a known character
+    # pattern, seek to it's position and compare it to the supposed pattern.
+    with tempfile.NamedTemporaryFile() as generated_disk_image:
+      bpt_tmp.seek(0)
+      self.bpt.make_disk_image(generated_disk_image,
+                               bpt_tmp,
+                               [p.partition_name + ':' + p.file.name
+                                for p in pattern_images])
+
+      for pi in pattern_images:
+        generated_disk_image.seek(pi.obj.offset)
+        pi.file.seek(0)
+
+        self.assertEqual(generated_disk_image.read(pi.obj.size),
+                    pi.file.read())
+        pi.file.close()
+
+    bpt_file.close()
+    bpt_tmp.close()
+
+  def _LargeBinary(self, bpt_file_name):
+    """Helper function to write large partition images to disk images.
+
+    This is a simple call to make_disk_image, passing a large in an image
+    which exceeds the it's size as specfied in the bpt file.
+
+    Arguments:
+      bpt_file_name: File name of bpt JSON containing partition information.
+
+    """
+    with open(bpt_file_name, 'r') as bpt_file, \
+         tempfile.NamedTemporaryFile() as bpt_tmp, \
+         tempfile.NamedTemporaryFile() as generated_disk_image, \
+         tempfile.NamedTemporaryFile() as large_partition_image:
+        partitions_string, _ = self.bpt.make_table([bpt_file])
+        bpt_tmp.write(partitions_string)
+        bpt_tmp.seek(0)
+        partitions, _ = self.bpt._read_json([bpt_tmp])
+
+        # Create the over-sized partition image.
+        large_partition_image.write(bytearray('0' *
+          int(1.1*partitions[0].size + 1)))
+
+        bpt_tmp.seek(0)
+
+        # Expect exception here.
+        self.bpt.make_disk_image(generated_disk_image, bpt_tmp,
+          [p.label + ':' + large_partition_image.name for p in partitions])
+
+  def testBinaryPattern(self):
+    """Checks patterns written to partitions on disk images."""
+    self._BinaryPattern('test/pattern_partition_single.bpt', [('charlie', 'c')])
+    self._BinaryPattern('test/pattern_partition_multi.bpt', [('alpha', 'a'),
+                        ('beta', 'b')])
+
+  def testExceedPartitionSize(self):
+    """Checks that exceedingly large partition images are not accepted."""
+    try:
+      self._LargeBinary('test/pattern_partition_exceed_size.bpt')
+    except bpttool.BptError as e:
+      assert 'exceeds the partition size' in e.message
 
 
 class MakeTableTest(unittest.TestCase):
