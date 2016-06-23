@@ -1028,7 +1028,7 @@ class BptTool(object):
                             action='append')
     sub_parser.add_argument('--allow_empty_partitions',
                             help='Allow skipping partitions in bpt file.',
-                            action='store_false')
+                            action='store_true')
     sub_parser.set_defaults(func=self.make_disk_image)
 
     sub_parser = subparsers.add_parser(
