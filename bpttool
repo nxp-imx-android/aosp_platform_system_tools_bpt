@@ -946,7 +946,7 @@ class Bpt(object):
       BptError: If another application-specific error occurs
     """
 
-    partitions, _ = self._read_json([input_file], 'ab_collapse')
+    partitions, _ = self._read_json([input_file], ab_collapse)
 
     part = None
     for p in partitions:
