@@ -71,8 +71,10 @@ KNOWN_TYPE_GUIDS = {
     'brillo_boot': 'bb499290-b57e-49f6-bf41-190386693794',
     'brillo_system': '0f2778c4-5cc1-4300-8670-6c88b7e57ed6',
     'brillo_odm': 'e99d84d7-2c1b-44cf-8c58-effae2dc2558',
+    'brillo_oem': 'aa3434b2-ddc3-4065-8b1a-18e99ea15cb7',
     'brillo_userdata': '0bb7e6ed-4424-49c0-9372-7fbab465ab4c',
     'brillo_misc': '6b2378b0-0fbc-4aa9-a4f6-4d6e17281c47',
+    'brillo_vbmeta': 'b598858a-5fe3-418e-b8c4-824b41f4adfc',
     'brillo_vendor_specific': '314f99d5-b2bf-4883-8d03-e2f2ce507d6a',
     'linux_fs': '0fc63daf-8483-4772-8e79-3d69d8477de4',
     'ms_basic_data': 'ebd0a0a2-b9e5-4433-87c0-68b6b72699c7'
