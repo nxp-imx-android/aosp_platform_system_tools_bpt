@@ -94,8 +94,10 @@ well-known key/value pairs:
                 brillo_boot
                 brillo_system
                 brillo_odm
+                brillo_oem
                 brillo_userdata
                 brillo_misc
+                brillo_vbmeta
                 brillo_vendor_specific
                 linux_fs
                 ms_basic_data
