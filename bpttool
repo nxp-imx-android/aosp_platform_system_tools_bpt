@@ -77,7 +77,8 @@ KNOWN_TYPE_GUIDS = {
     'brillo_vbmeta': 'b598858a-5fe3-418e-b8c4-824b41f4adfc',
     'brillo_vendor_specific': '314f99d5-b2bf-4883-8d03-e2f2ce507d6a',
     'linux_fs': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-    'ms_basic_data': 'ebd0a0a2-b9e5-4433-87c0-68b6b72699c7'
+    'ms_basic_data': 'ebd0a0a2-b9e5-4433-87c0-68b6b72699c7',
+    'efi_system': 'c12a7328-f81f-11d2-ba4b-00a0c93ec93b'
 }
 
 
