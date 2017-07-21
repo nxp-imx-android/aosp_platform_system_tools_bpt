@@ -92,6 +92,7 @@ well-known key/value pairs:
               are the following special values:
 
                 brillo_boot
+                brillo_bootloader
                 brillo_system
                 brillo_odm
                 brillo_oem
