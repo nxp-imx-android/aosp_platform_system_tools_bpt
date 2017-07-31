@@ -69,6 +69,7 @@ GPT_MAX_PART_NUM = 128
 
 KNOWN_TYPE_GUIDS = {
     'brillo_boot': 'bb499290-b57e-49f6-bf41-190386693794',
+    'brillo_bootloader': '4892aeb3-a45f-4c5f-875f-da3303c0795c',
     'brillo_system': '0f2778c4-5cc1-4300-8670-6c88b7e57ed6',
     'brillo_odm': 'e99d84d7-2c1b-44cf-8c58-effae2dc2558',
     'brillo_oem': 'aa3434b2-ddc3-4065-8b1a-18e99ea15cb7',
