@@ -258,36 +258,36 @@ class Partition(object):
     """
     self.label = pobj[JSON_KEYWORD_PARTITIONS_LABEL]
     value = pobj.get(JSON_KEYWORD_PARTITIONS_OFFSET)
-    if value:
+    if value is not None:
       self.offset = ParseSize(value)
     value = pobj.get(JSON_KEYWORD_PARTITIONS_SIZE)
-    if value:
+    if value is not None:
       self.size = ParseSize(value)
     value = pobj.get(JSON_KEYWORD_PARTITIONS_GROW)
-    if value:
-      self.grow = True
+    if value is not None:
+      self.grow = value
     value = pobj.get(JSON_KEYWORD_PARTITIONS_AB)
-    if value:
+    if value is not None:
       self.ab = value
     value = pobj.get(JSON_KEYWORD_PARTITIONS_AB_EXPANDED)
-    if value:
+    if value is not None:
       self.ab_expanded = value
     value = pobj.get(JSON_KEYWORD_PARTITIONS_GUID)
-    if value:
+    if value is not None:
       self.guid = value
     value = pobj.get(JSON_KEYWORD_PARTITIONS_IGNORE)
-    if value:
+    if value is not None:
       self.ignore = value
     value = pobj.get(JSON_KEYWORD_PARTITIONS_TYPE_GUID)
-    if value:
+    if value is not None:
       self.type_guid = str.lower(str(value))
       if self.type_guid in KNOWN_TYPE_GUIDS:
         self.type_guid = KNOWN_TYPE_GUIDS[self.type_guid]
     value = pobj.get(JSON_KEYWORD_PARTITIONS_FLAGS)
-    if value:
+    if value is not None:
       self.flags = ParseNumber(value)
     value = pobj.get(JSON_KEYWORD_PARTITIONS_POSITION)
-    if value:
+    if value is not None:
       self.position = ParseNumber(value)
 
   def expand_guid(self, guid_generator, partition_number):
