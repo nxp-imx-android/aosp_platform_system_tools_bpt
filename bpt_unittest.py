@@ -346,6 +346,12 @@ class MakeTableTest(unittest.TestCase):
                     'test/expected_json_stacked_change_flags.bpt',
                     disk_size=bpttool.ParseSize('10 GiB'))
 
+  def testStackedDisableAB(self):
+    """Checks that we can change disable A/B on partitions through stacking."""
+    self._MakeTable(['test/base.bpt', 'test/disable_ab.bpt'],
+                    'test/expected_json_stacked_disable_ab.bpt',
+                    disk_size=bpttool.ParseSize('10 GiB'))
+
   def testStackedNewPartitionOnTop(self):
     """Checks that we can add a new partition only given the output JSON.
 
