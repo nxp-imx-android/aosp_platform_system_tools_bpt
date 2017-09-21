@@ -19,10 +19,12 @@
 
 
 import argparse
+import bisect
 import copy
 import json
 import math
 import numbers
+import os
 import struct
 import sys
 import uuid
@@ -193,6 +195,473 @@ def ParseSize(arg):
   else:
     value = int(arg, 0)
   return value
+
+
+class ImageChunk(object):
+  """Data structure used for representing chunks in Android sparse files.
+
+  Attributes:
+    chunk_type: One of TYPE_RAW, TYPE_FILL, or TYPE_DONT_CARE.
+    chunk_offset: Offset in the sparse file where this chunk begins.
+    output_offset: Offset in de-sparsified file where output begins.
+    output_size: Number of bytes in output.
+    input_offset: Offset in sparse file for data if TYPE_RAW otherwise None.
+    fill_data: Blob with data to fill if TYPE_FILL otherwise None.
+  """
+
+  FORMAT = '<2H2I'
+  TYPE_RAW = 0xcac1
+  TYPE_FILL = 0xcac2
+  TYPE_DONT_CARE = 0xcac3
+  TYPE_CRC32 = 0xcac4
+
+  def __init__(self, chunk_type, chunk_offset, output_offset, output_size,
+               input_offset, fill_data):
+    """Initializes an ImageChunk object.
+
+    Arguments:
+      chunk_type: One of TYPE_RAW, TYPE_FILL, or TYPE_DONT_CARE.
+      chunk_offset: Offset in the sparse file where this chunk begins.
+      output_offset: Offset in de-sparsified file.
+      output_size: Number of bytes in output.
+      input_offset: Offset in sparse file if TYPE_RAW otherwise None.
+      fill_data: Blob with data to fill if TYPE_FILL otherwise None.
+
+    Raises:
+      ValueError: If data is not well-formed.
+    """
+    self.chunk_type = chunk_type
+    self.chunk_offset = chunk_offset
+    self.output_offset = output_offset
+    self.output_size = output_size
+    self.input_offset = input_offset
+    self.fill_data = fill_data
+    # Check invariants.
+    if self.chunk_type == self.TYPE_RAW:
+      if self.fill_data is not None:
+        raise ValueError('RAW chunk cannot have fill_data set.')
+      if not self.input_offset:
+        raise ValueError('RAW chunk must have input_offset set.')
+    elif self.chunk_type == self.TYPE_FILL:
+      if self.fill_data is None:
+        raise ValueError('FILL chunk must have fill_data set.')
+      if self.input_offset:
+        raise ValueError('FILL chunk cannot have input_offset set.')
+    elif self.chunk_type == self.TYPE_DONT_CARE:
+      if self.fill_data is not None:
+        raise ValueError('DONT_CARE chunk cannot have fill_data set.')
+      if self.input_offset:
+        raise ValueError('DONT_CARE chunk cannot have input_offset set.')
+    else:
+      raise ValueError('Invalid chunk type')
+
+
+class ImageHandler(object):
+  """Abstraction for image I/O with support for Android sparse images.
+
+  This class provides an interface for working with image files that
+  may be using the Android Sparse Image format. When an instance is
+  constructed, we test whether it's an Android sparse file. If so,
+  operations will be on the sparse file by interpreting the sparse
+  format, otherwise they will be directly on the file. Either way the
+  operations do the same.
+
+  For reading, this interface mimics a file object - it has seek(),
+  tell(), and read() methods. For writing, only truncation
+  (truncate()) and appending is supported (append_raw(),
+  append_fill(), and append_dont_care()). Additionally, data can only
+  be written in units of the block size.
+
+  Attributes:
+    is_sparse: Whether the file being operated on is sparse.
+    block_size: The block size, typically 4096.
+    image_size: The size of the unsparsified file.
+
+  """
+  # See system/core/libsparse/sparse_format.h for details.
+  MAGIC = 0xed26ff3a
+  HEADER_FORMAT = '<I4H4I'
+
+  # These are formats and offset of just the |total_chunks| and
+  # |total_blocks| fields.
+  NUM_CHUNKS_AND_BLOCKS_FORMAT = '<II'
+  NUM_CHUNKS_AND_BLOCKS_OFFSET = 16
+
+  def __init__(self, image_filename):
+    """Initializes an image handler.
+
+    Arguments:
+      image_filename: The name of the file to operate on.
+
+    Raises:
+      ValueError: If data in the file is invalid.
+    """
+    self._image_filename = image_filename
+    self._read_header()
+
+  def _read_header(self):
+    """Initializes internal data structures used for reading file.
+
+    This may be called multiple times and is typically called after
+    modifying the file (e.g. appending, truncation).
+
+    Raises:
+      ValueError: If data in the file is invalid.
+    """
+    self.is_sparse = False
+    self.block_size = 4096
+    self._file_pos = 0
+    self._image = open(self._image_filename, 'r+b')
+    self._image.seek(0, os.SEEK_END)
+    self.image_size = self._image.tell()
+
+    self._image.seek(0, os.SEEK_SET)
+    header_bin = self._image.read(struct.calcsize(self.HEADER_FORMAT))
+    if len(header_bin) < struct.calcsize(self.HEADER_FORMAT):
+      # Not a sparse image, our job here is done.
+      return
+    (magic, major_version, minor_version, file_hdr_sz, chunk_hdr_sz,
+     block_size, self._num_total_blocks, self._num_total_chunks,
+     _) = struct.unpack(self.HEADER_FORMAT, header_bin)
+    if magic != self.MAGIC:
+      # Not a sparse image, our job here is done.
+      return
+    if not (major_version == 1 and minor_version == 0):
+      raise ValueError('Encountered sparse image format version {}.{} but '
+                       'only 1.0 is supported'.format(major_version,
+                                                      minor_version))
+    if file_hdr_sz != struct.calcsize(self.HEADER_FORMAT):
+      raise ValueError('Unexpected file_hdr_sz value {}.'.
+                       format(file_hdr_sz))
+    if chunk_hdr_sz != struct.calcsize(ImageChunk.FORMAT):
+      raise ValueError('Unexpected chunk_hdr_sz value {}.'.
+                       format(chunk_hdr_sz))
+
+    self.block_size = block_size
+
+    # Build an list of chunks by parsing the file.
+    self._chunks = []
+
+    # Find the smallest offset where only "Don't care" chunks
+    # follow. This will be the size of the content in the sparse
+    # image.
+    offset = 0
+    output_offset = 0
+    for _ in xrange(1, self._num_total_chunks + 1):
+      chunk_offset = self._image.tell()
+
+      header_bin = self._image.read(struct.calcsize(ImageChunk.FORMAT))
+      (chunk_type, _, chunk_sz, total_sz) = struct.unpack(ImageChunk.FORMAT,
+                                                          header_bin)
+      data_sz = total_sz - struct.calcsize(ImageChunk.FORMAT)
+
+      if chunk_type == ImageChunk.TYPE_RAW:
+        if data_sz != (chunk_sz * self.block_size):
+          raise ValueError('Raw chunk input size ({}) does not match output '
+                           'size ({})'.
+                           format(data_sz, chunk_sz*self.block_size))
+        self._chunks.append(ImageChunk(ImageChunk.TYPE_RAW,
+                                       chunk_offset,
+                                       output_offset,
+                                       chunk_sz*self.block_size,
+                                       self._image.tell(),
+                                       None))
+        self._image.read(data_sz)
+
+      elif chunk_type == ImageChunk.TYPE_FILL:
+        if data_sz != 4:
+          raise ValueError('Fill chunk should have 4 bytes of fill, but this '
+                           'has {}'.format(data_sz))
+        fill_data = self._image.read(4)
+        self._chunks.append(ImageChunk(ImageChunk.TYPE_FILL,
+                                       chunk_offset,
+                                       output_offset,
+                                       chunk_sz*self.block_size,
+                                       None,
+                                       fill_data))
+      elif chunk_type == ImageChunk.TYPE_DONT_CARE:
+        if data_sz != 0:
+          raise ValueError('Don\'t care chunk input size is non-zero ({})'.
+                           format(data_sz))
+        self._chunks.append(ImageChunk(ImageChunk.TYPE_DONT_CARE,
+                                       chunk_offset,
+                                       output_offset,
+                                       chunk_sz*self.block_size,
+                                       None,
+                                       None))
+      elif chunk_type == ImageChunk.TYPE_CRC32:
+        if data_sz != 4:
+          raise ValueError('CRC32 chunk should have 4 bytes of CRC, but '
+                           'this has {}'.format(data_sz))
+        self._image.read(4)
+      else:
+        raise ValueError('Unknown chunk type {}'.format(chunk_type))
+
+      offset += chunk_sz
+      output_offset += chunk_sz * self.block_size
+
+    # Record where sparse data end.
+    self._sparse_end = self._image.tell()
+
+    # Now that we've traversed all chunks, sanity check.
+    if self._num_total_blocks != offset:
+      raise ValueError('The header said we should have {} output blocks, '
+                       'but we saw {}'.format(self._num_total_blocks, offset))
+    junk_len = len(self._image.read())
+    if junk_len > 0:
+      raise ValueError('There were {} bytes of extra data at the end of the '
+                       'file.'.format(junk_len))
+
+    # Assign |image_size|.
+    self.image_size = output_offset
+
+    # This is used when bisecting in read() to find the initial slice.
+    self._chunk_output_offsets = [i.output_offset for i in self._chunks]
+
+    self.is_sparse = True
+
+  def _update_chunks_and_blocks(self):
+    """Helper function to update the image header.
+
+    The the |total_chunks| and |total_blocks| fields in the header
+    will be set to value of the |_num_total_blocks| and
+    |_num_total_chunks| attributes.
+
+    """
+    self._image.seek(self.NUM_CHUNKS_AND_BLOCKS_OFFSET, os.SEEK_SET)
+    self._image.write(struct.pack(self.NUM_CHUNKS_AND_BLOCKS_FORMAT,
+                                  self._num_total_blocks,
+                                  self._num_total_chunks))
+
+  def append_dont_care(self, num_bytes):
+    """Appends a DONT_CARE chunk to the sparse file.
+
+    The given number of bytes must be a multiple of the block size.
+
+    Arguments:
+      num_bytes: Size in number of bytes of the DONT_CARE chunk.
+    """
+    assert num_bytes % self.block_size == 0
+
+    if not self.is_sparse:
+      self._image.seek(0, os.SEEK_END)
+      # This is more efficient that writing NUL bytes since it'll add
+      # a hole on file systems that support sparse files (native
+      # sparse, not Android sparse).
+      self._image.truncate(self._image.tell() + num_bytes)
+      self._read_header()
+      return
+
+    self._num_total_chunks += 1
+    self._num_total_blocks += num_bytes / self.block_size
+    self._update_chunks_and_blocks()
+
+    self._image.seek(self._sparse_end, os.SEEK_SET)
+    self._image.write(struct.pack(ImageChunk.FORMAT,
+                                  ImageChunk.TYPE_DONT_CARE,
+                                  0,  # Reserved
+                                  num_bytes / self.block_size,
+                                  struct.calcsize(ImageChunk.FORMAT)))
+    self._read_header()
+
+  def append_raw(self, data):
+    """Appends a RAW chunk to the sparse file.
+
+    The length of the given data must be a multiple of the block size.
+
+    Arguments:
+      data: Data to append.
+    """
+    assert len(data) % self.block_size == 0
+
+    if not self.is_sparse:
+      self._image.seek(0, os.SEEK_END)
+      self._image.write(data)
+      self._read_header()
+      return
+
+    self._num_total_chunks += 1
+    self._num_total_blocks += len(data) / self.block_size
+    self._update_chunks_and_blocks()
+
+    self._image.seek(self._sparse_end, os.SEEK_SET)
+    self._image.write(struct.pack(ImageChunk.FORMAT,
+                                  ImageChunk.TYPE_RAW,
+                                  0,  # Reserved
+                                  len(data) / self.block_size,
+                                  len(data) +
+                                  struct.calcsize(ImageChunk.FORMAT)))
+    self._image.write(data)
+    self._read_header()
+
+  def append_fill(self, fill_data, size):
+    """Appends a fill chunk to the sparse file.
+
+    The total length of the fill data must be a multiple of the block size.
+
+    Arguments:
+      fill_data: Fill data to append - must be four bytes.
+      size: Number of chunk - must be a multiple of four and the block size.
+    """
+    assert len(fill_data) == 4
+    assert size % 4 == 0
+    assert size % self.block_size == 0
+
+    if not self.is_sparse:
+      self._image.seek(0, os.SEEK_END)
+      self._image.write(fill_data * (size/4))
+      self._read_header()
+      return
+
+    self._num_total_chunks += 1
+    self._num_total_blocks += size / self.block_size
+    self._update_chunks_and_blocks()
+
+    self._image.seek(self._sparse_end, os.SEEK_SET)
+    self._image.write(struct.pack(ImageChunk.FORMAT,
+                                  ImageChunk.TYPE_FILL,
+                                  0,  # Reserved
+                                  size / self.block_size,
+                                  4 + struct.calcsize(ImageChunk.FORMAT)))
+    self._image.write(fill_data)
+    self._read_header()
+
+  def seek(self, offset):
+    """Sets the cursor position for reading from unsparsified file.
+
+    Arguments:
+      offset: Offset to seek to from the beginning of the file.
+    """
+    self._file_pos = offset
+
+  def read(self, size):
+    """Reads data from the unsparsified file.
+
+    This method may return fewer than |size| bytes of data if the end
+    of the file was encountered.
+
+    The file cursor for reading is advanced by the number of bytes
+    read.
+
+    Arguments:
+      size: Number of bytes to read.
+
+    Returns:
+      The data.
+
+    """
+    if not self.is_sparse:
+      self._image.seek(self._file_pos)
+      data = self._image.read(size)
+      self._file_pos += len(data)
+      return data
+
+    # Iterate over all chunks.
+    chunk_idx = bisect.bisect_right(self._chunk_output_offsets,
+                                    self._file_pos) - 1
+    data = bytearray()
+    to_go = size
+    while to_go > 0:
+      chunk = self._chunks[chunk_idx]
+      chunk_pos_offset = self._file_pos - chunk.output_offset
+      chunk_pos_to_go = min(chunk.output_size - chunk_pos_offset, to_go)
+
+      if chunk.chunk_type == ImageChunk.TYPE_RAW:
+        self._image.seek(chunk.input_offset + chunk_pos_offset)
+        data.extend(self._image.read(chunk_pos_to_go))
+      elif chunk.chunk_type == ImageChunk.TYPE_FILL:
+        all_data = chunk.fill_data*(chunk_pos_to_go/len(chunk.fill_data) + 2)
+        offset_mod = chunk_pos_offset % len(chunk.fill_data)
+        data.extend(all_data[offset_mod:(offset_mod + chunk_pos_to_go)])
+      else:
+        assert chunk.chunk_type == ImageChunk.TYPE_DONT_CARE
+        data.extend('\0' * chunk_pos_to_go)
+
+      to_go -= chunk_pos_to_go
+      self._file_pos += chunk_pos_to_go
+      chunk_idx += 1
+      # Generate partial read in case of EOF.
+      if chunk_idx >= len(self._chunks):
+        break
+
+    return data
+
+  def tell(self):
+    """Returns the file cursor position for reading from unsparsified file.
+
+    Returns:
+      The file cursor position for reading.
+    """
+    return self._file_pos
+
+  def truncate(self, size):
+    """Truncates the unsparsified file.
+
+    Arguments:
+      size: Desired size of unsparsified file.
+
+    Raises:
+      ValueError: If desired size isn't a multiple of the block size.
+    """
+    if not self.is_sparse:
+      self._image.truncate(size)
+      self._read_header()
+      return
+
+    if size % self.block_size != 0:
+      raise ValueError('Cannot truncate to a size which is not a multiple '
+                       'of the block size')
+
+    if size == self.image_size:
+      # Trivial where there's nothing to do.
+      return
+    elif size < self.image_size:
+      chunk_idx = bisect.bisect_right(self._chunk_output_offsets, size) - 1
+      chunk = self._chunks[chunk_idx]
+      if chunk.output_offset != size:
+        # Truncation in the middle of a trunk - need to keep the chunk
+        # and modify it.
+        chunk_idx_for_update = chunk_idx + 1
+        num_to_keep = size - chunk.output_offset
+        assert num_to_keep % self.block_size == 0
+        if chunk.chunk_type == ImageChunk.TYPE_RAW:
+          truncate_at = (chunk.chunk_offset +
+                         struct.calcsize(ImageChunk.FORMAT) + num_to_keep)
+          data_sz = num_to_keep
+        elif chunk.chunk_type == ImageChunk.TYPE_FILL:
+          truncate_at = (chunk.chunk_offset +
+                         struct.calcsize(ImageChunk.FORMAT) + 4)
+          data_sz = 4
+        else:
+          assert chunk.chunk_type == ImageChunk.TYPE_DONT_CARE
+          truncate_at = chunk.chunk_offset + struct.calcsize(ImageChunk.FORMAT)
+          data_sz = 0
+        chunk_sz = num_to_keep/self.block_size
+        total_sz = data_sz + struct.calcsize(ImageChunk.FORMAT)
+        self._image.seek(chunk.chunk_offset)
+        self._image.write(struct.pack(ImageChunk.FORMAT,
+                                      chunk.chunk_type,
+                                      0,  # Reserved
+                                      chunk_sz,
+                                      total_sz))
+        chunk.output_size = num_to_keep
+      else:
+        # Truncation at trunk boundary.
+        truncate_at = chunk.chunk_offset
+        chunk_idx_for_update = chunk_idx
+
+      self._num_total_chunks = chunk_idx_for_update
+      self._num_total_blocks = 0
+      for i in range(0, chunk_idx_for_update):
+        self._num_total_blocks += self._chunks[i].output_size / self.block_size
+      self._update_chunks_and_blocks()
+      self._image.truncate(truncate_at)
+
+      # We've modified the file so re-read all data.
+      self._read_header()
+    else:
+      # Truncating to grow - just add a DONT_CARE section.
+      self.append_dont_care(size - self.image_size)
 
 
 class GuidGenerator(object):
@@ -914,13 +1383,10 @@ class Bpt(object):
           raise BptParsingError(bpt.name, 'No content specified for partition'
                                 ' with label {}'.format(p.label))
 
-      with open(image_file_names[p.label], 'rb') as partition_image:
-        output.seek(p.offset)
-        partition_blob = partition_image.read()
-        if len(partition_blob) > p.size:
-          raise BptError('Partition image content with label "{}" exceeds the '
-                         'partition size.'.format(p.label))
-        output.write(partition_blob)
+      input_image = ImageHandler(image_file_names[p.label])
+      output.seek(p.offset)
+      partition_blob = input_image.read(p.size)
+      output.write(partition_blob)
 
     # Put secondary GPT and end of disk.
     output.seek(settings.disk_size - len(secondary_gpt))
