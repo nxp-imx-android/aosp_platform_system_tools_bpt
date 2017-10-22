@@ -34,6 +34,7 @@ JSON_KEYWORD_SETTINGS = 'settings'
 JSON_KEYWORD_SETTINGS_AB_SUFFIXES = 'ab_suffixes'
 JSON_KEYWORD_SETTINGS_DISK_SIZE = 'disk_size'
 JSON_KEYWORD_SETTINGS_DISK_ALIGNMENT = 'disk_alignment'
+JSON_KEYWORD_SETTINGS_FIRST_PARTITION_OFFSET = 'first_partition_offset'
 JSON_KEYWORD_SETTINGS_DISK_GUID = 'disk_guid'
 JSON_KEYWORD_PARTITIONS = 'partitions'
 JSON_KEYWORD_PARTITIONS_LABEL = 'label'
@@ -349,6 +350,7 @@ class Settings(object):
     self.disk_size = None
     self.disk_alignment = 4096
     self.disk_guid = JSON_KEYWORD_AUTO
+    self.first_partition_offset = None
 
 
 class BptError(Exception):
@@ -421,6 +423,9 @@ class Bpt(object):
         disk_alignment = sobj.get(JSON_KEYWORD_SETTINGS_DISK_ALIGNMENT)
         if disk_alignment:
           settings.disk_alignment = ParseSize(disk_alignment)
+        first_partition_offset = sobj.get(JSON_KEYWORD_SETTINGS_FIRST_PARTITION_OFFSET)
+        if first_partition_offset:
+          settings.first_partition_offset = ParseSize(first_partition_offset)
         disk_guid = sobj.get(JSON_KEYWORD_SETTINGS_DISK_GUID)
         if disk_guid:
           settings.disk_guid = disk_guid
@@ -802,7 +807,7 @@ class Bpt(object):
     # support more in the future by splitting up the available bytes
     # between them.
     grow_part = None
-    offset = DISK_SECTOR_SIZE*(1 + GPT_NUM_LBAS)
+    offset = max(DISK_SECTOR_SIZE*(1 + GPT_NUM_LBAS), settings.first_partition_offset)
     for p in partitions:
       if p.grow:
         if grow_part:
@@ -840,7 +845,7 @@ class Bpt(object):
 
     # Now we can assign partition start offsets for all partitions,
     # including the grow partition.
-    offset = DISK_SECTOR_SIZE*(1 + GPT_NUM_LBAS)
+    offset = max(DISK_SECTOR_SIZE*(1 + GPT_NUM_LBAS),settings.first_partition_offset)
     for p in partitions:
       # Align offset.
       offset = RoundToMultiple(offset, settings.disk_alignment)
