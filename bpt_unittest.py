@@ -279,6 +279,7 @@ class MakeTableTest(unittest.TestCase):
   def _MakeTable(self, input_file_names,
                  expected_json_file_name,
                  expected_gpt_file_name=None,
+                 partitions_offset_begin=None,
                  disk_size=None,
                  disk_alignment=None,
                  disk_guid=None,
@@ -293,6 +294,8 @@ class MakeTableTest(unittest.TestCase):
       expected_json_file_name: File name of the file with expected JSON output.
       expected_gpt_file_name: File name of the file with expected binary
                               output or None.
+      partitions_offset_begin: if not None, the size of the disk
+                               partitions offset begin to use.
       disk_size: if not None, the size of the disk to use.
       disk_alignment: if not None, the disk alignment to use.
       disk_guid: if not None, the disk GUID to use.
@@ -308,6 +311,7 @@ class MakeTableTest(unittest.TestCase):
     bpt = bpttool.Bpt()
     (json_str, gpt_bin) = bpt.make_table(
         inputs,
+        partitions_offset_begin=partitions_offset_begin,
         disk_size=disk_size,
         disk_alignment=disk_alignment,
         disk_guid=disk_guid,
@@ -345,6 +349,14 @@ class MakeTableTest(unittest.TestCase):
                     'test/expected_json_alignment.bpt',
                     disk_size=bpttool.ParseSize('10 GiB'),
                     disk_alignment=1048576)
+
+  def testPartitionsOffsetBegin(self):
+    """Checks that disk partitions offset begin
+       can be changed on the command-line."""
+    self._MakeTable(['test/base.bpt'],
+                    'test/expected_json_partitions_offset_begin.bpt',
+                    partitions_offset_begin=bpttool.ParseSize('1 MiB'),
+                    disk_size=bpttool.ParseSize('10 GiB'))
 
   def testDiskGuid(self):
     """Checks that disk GUID can be changed on the command-line."""

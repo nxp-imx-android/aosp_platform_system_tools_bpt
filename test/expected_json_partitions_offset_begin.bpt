@@ -1,7 +1,7 @@
 {
   "settings": {
     "ab_suffixes": ["_a", "_b"],
-    "partitions_offset_begin": 0,
+    "partitions_offset_begin": 1048576,
     "disk_size": 10737418240,
     "disk_alignment": 4096,
     "disk_guid": "01234567-89ab-cdef-0123-000000000000"
@@ -9,7 +9,7 @@
   "partitions": [
     {
       "label": "boot_a",
-      "offset": 20480,
+      "offset": 1048576,
       "size": 33554432,
       "grow": false,
       "guid": "01234567-89ab-cdef-0123-000000000001",
@@ -22,7 +22,7 @@
     },
     {
       "label": "boot_b",
-      "offset": 33574912,
+      "offset": 34603008,
       "size": 33554432,
       "grow": false,
       "guid": "01234567-89ab-cdef-0123-000000000002",
@@ -35,7 +35,7 @@
     },
     {
       "label": "system_a",
-      "offset": 67129344,
+      "offset": 68157440,
       "size": 536870912,
       "grow": false,
       "guid": "01234567-89ab-cdef-0123-000000000003",
@@ -48,7 +48,7 @@
     },
     {
       "label": "system_b",
-      "offset": 604000256,
+      "offset": 605028352,
       "size": 536870912,
       "grow": false,
       "guid": "01234567-89ab-cdef-0123-000000000004",
@@ -61,7 +61,7 @@
     },
     {
       "label": "odm_a",
-      "offset": 1140871168,
+      "offset": 1141899264,
       "size": 1073741824,
       "grow": false,
       "guid": "01234567-89ab-cdef-0123-000000000005",
@@ -74,7 +74,7 @@
     },
     {
       "label": "odm_b",
-      "offset": 2214612992,
+      "offset": 2215641088,
       "size": 1073741824,
       "grow": false,
       "guid": "01234567-89ab-cdef-0123-000000000006",
@@ -87,12 +87,12 @@
     },
     {
       "label": "userdata",
-      "offset": 3288354816,
-      "size": 7449042944,
+      "offset": 3289382912,
+      "size": 7448014848,
       "grow": true,
       "guid": "01234567-89ab-cdef-0123-000000000007",
       "type_guid": "0bb7e6ed-4424-49c0-9372-7fbab465ab4c",
-      "flags": "0x0420000000000000",
+      "flags": "0x0000000000000000",
       "ignore": false,
       "ab": false,
       "ab_expanded": false,

@@ -37,6 +37,7 @@ JSON_KEYWORD_SETTINGS_AB_SUFFIXES = 'ab_suffixes'
 JSON_KEYWORD_SETTINGS_DISK_SIZE = 'disk_size'
 JSON_KEYWORD_SETTINGS_DISK_ALIGNMENT = 'disk_alignment'
 JSON_KEYWORD_SETTINGS_DISK_GUID = 'disk_guid'
+JSON_KEYWORD_SETTINGS_PARTITIONS_OFFSET_BEGIN = 'partitions_offset_begin'
 JSON_KEYWORD_PARTITIONS = 'partitions'
 JSON_KEYWORD_PARTITIONS_LABEL = 'label'
 JSON_KEYWORD_PARTITIONS_OFFSET = 'offset'
@@ -807,6 +808,8 @@ class Settings(object):
   Attributes:
     ab_suffixes: A list of A/B suffixes to use.
     disk_size: An integer with the disk size in bytes.
+    partitions_offset_begin: An integer with the disk partitions
+                             offset begin size in bytes.
     disk_alignment: The alignment to use for partitions.
     disk_guid: The GUID to use for the disk or None or 'auto' if
                automatically generated.
@@ -816,6 +819,7 @@ class Settings(object):
     """Initializer with defaults."""
     self.ab_suffixes = ['_a', '_b']
     self.disk_size = None
+    self.partitions_offset_begin = 0
     self.disk_alignment = 4096
     self.disk_guid = JSON_KEYWORD_AUTO
 
@@ -887,6 +891,10 @@ class Bpt(object):
         disk_size = sobj.get(JSON_KEYWORD_SETTINGS_DISK_SIZE)
         if disk_size:
           settings.disk_size = ParseSize(disk_size)
+        partitions_offset_begin = sobj.get(
+                JSON_KEYWORD_SETTINGS_PARTITIONS_OFFSET_BEGIN)
+        if partitions_offset_begin:
+          settings.partitions_offset_begin = ParseSize(partitions_offset_begin)
         disk_alignment = sobj.get(JSON_KEYWORD_SETTINGS_DISK_ALIGNMENT)
         if disk_alignment:
           settings.disk_alignment = ParseSize(disk_alignment)
@@ -945,12 +953,14 @@ class Bpt(object):
     ret = ('{{\n'
            '  "' + JSON_KEYWORD_SETTINGS + '": {{\n'
            '    "' + JSON_KEYWORD_SETTINGS_AB_SUFFIXES + '": {},\n'
+           '    "' + JSON_KEYWORD_SETTINGS_PARTITIONS_OFFSET_BEGIN + '": {},\n'
            '    "' + JSON_KEYWORD_SETTINGS_DISK_SIZE + '": {},\n'
            '    "' + JSON_KEYWORD_SETTINGS_DISK_ALIGNMENT + '": {},\n'
            '    "' + JSON_KEYWORD_SETTINGS_DISK_GUID + '": "{}"\n'
            '  }},\n'
            '  "' + JSON_KEYWORD_PARTITIONS + '": [\n').format(
                suffixes_str,
+               settings.partitions_offset_begin,
                settings.disk_size,
                settings.disk_alignment,
                settings.disk_guid)
@@ -1176,6 +1186,7 @@ class Bpt(object):
   def make_table(self,
                  inputs,
                  ab_suffixes=None,
+                 partitions_offset_begin=None,
                  disk_size=None,
                  disk_alignment=None,
                  disk_guid=None,
@@ -1190,6 +1201,8 @@ class Bpt(object):
       inputs: List of JSON files to parse.
       ab_suffixes: List of the A/B suffixes (as a comma-separated string)
                    to use or None to not override.
+      partitions_offset_begin: Size of disk partitions offset
+                               begin or None to not override.
       disk_size: Size of disk or None to not override.
       disk_alignment: Disk alignment or None to not override.
       disk_guid: Disk GUID as a string or None to not override.
@@ -1211,6 +1224,8 @@ class Bpt(object):
       settings.disk_size = int(math.ceil(disk_size))
     if disk_alignment:
       settings.disk_alignment = int(disk_alignment)
+    if partitions_offset_begin:
+      settings.partitions_offset_begin = int(partitions_offset_begin)
     if ab_suffixes:
       settings.ab_suffixes = ab_suffixes.split(',')
     if disk_guid:
@@ -1233,6 +1248,19 @@ class Bpt(object):
       raise BptError(
           'Disk alignment size of {} is not divisible by {}.\n'.format(
               settings.disk_alignment, DISK_SECTOR_SIZE))
+
+    if settings.partitions_offset_begin != 0:
+      # Disk partitions offset begin size must be
+      # divisible by disk sector size.
+      if settings.partitions_offset_begin % settings.disk_alignment != 0:
+        raise BptError(
+            'Disk Partitions offset begin size of {} '
+            'is not divisible by {}.\n'.format(
+                settings.partitions_offset_begin, settings.disk_alignment))
+      settings.partitions_offset_begin = max(settings.partitions_offset_begin,
+                                           DISK_SECTOR_SIZE*(1 + GPT_NUM_LBAS))
+      settings.partitions_offset_begin = RoundToMultiple(
+          settings.partitions_offset_begin, settings.disk_alignment)
 
     # Expand A/B partitions and skip ignored partitions.
     expanded_partitions = []
@@ -1271,7 +1299,9 @@ class Bpt(object):
     # support more in the future by splitting up the available bytes
     # between them.
     grow_part = None
-    offset = DISK_SECTOR_SIZE*(1 + GPT_NUM_LBAS)
+    # offset minimal size: DISK_SECTOR_SIZE*(1 + GPT_NUM_LBAS)
+    offset = max(settings.partitions_offset_begin,
+                 DISK_SECTOR_SIZE*(1 + GPT_NUM_LBAS))
     for p in partitions:
       if p.grow:
         if grow_part:
@@ -1309,7 +1339,9 @@ class Bpt(object):
 
     # Now we can assign partition start offsets for all partitions,
     # including the grow partition.
-    offset = DISK_SECTOR_SIZE*(1 + GPT_NUM_LBAS)
+    # offset minimal size: DISK_SECTOR_SIZE*(1 + GPT_NUM_LBAS)
+    offset = max(settings.partitions_offset_begin,
+                 DISK_SECTOR_SIZE*(1 + GPT_NUM_LBAS))
     for p in partitions:
       # Align offset.
       offset = RoundToMultiple(offset, settings.disk_alignment)
@@ -1462,6 +1494,10 @@ class BptTool(object):
                             action='append')
     sub_parser.add_argument('--ab_suffixes',
                             help='Set or override A/B suffixes.')
+    sub_parser.add_argument('--partitions_offset_begin',
+                            help='Set or override disk partitions '
+                                 'offset begin size.',
+                            type=ParseSize)
     sub_parser.add_argument('--disk_size',
                             help='Set or override disk size.',
                             type=ParseSize)
@@ -1553,6 +1589,7 @@ class BptTool(object):
 
     try:
       (json_str, gpt_bin) = self.bpt.make_table(args.input, args.ab_suffixes,
+                                                args.partitions_offset_begin,
                                                 args.disk_size,
                                                 args.disk_alignment,
                                                 args.disk_guid)
