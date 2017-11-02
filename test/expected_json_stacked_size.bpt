@@ -1,6 +1,7 @@
 {
   "settings": {
     "ab_suffixes": ["_a", "_b"],
+    "partitions_offset_begin": 0,
     "disk_size": 10737418240,
     "disk_alignment": 4096,
     "disk_guid": "01234567-89ab-cdef-0123-000000000000"

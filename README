@@ -63,6 +63,10 @@ key/value-pairs for "settings" are
  disk_size:      The size of the target disk to use, in bytes. This has
                  no default value.
 
+ partitions_offset_begin :
+                 The size of the disk partitions offset begin, in bytes.
+                 Default is 0.
+
  disk_alignment: The alignment, in bytes, to use when laying out
                  partitions. Default is 4096.
 
