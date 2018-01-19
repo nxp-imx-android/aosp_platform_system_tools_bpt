@@ -44,6 +44,7 @@ JSON_KEYWORD_PARTITIONS_GROW = 'grow'
 JSON_KEYWORD_PARTITIONS_GUID = 'guid'
 JSON_KEYWORD_PARTITIONS_TYPE_GUID = 'type_guid'
 JSON_KEYWORD_PARTITIONS_FLAGS = 'flags'
+JSON_KEYWORD_PARTITIONS_PERSIST = 'persist'
 JSON_KEYWORD_PARTITIONS_IGNORE = 'ignore'
 JSON_KEYWORD_PARTITIONS_AB = 'ab'
 JSON_KEYWORD_PARTITIONS_AB_EXPANDED = 'ab_expanded'
@@ -56,7 +57,8 @@ QUERY_PARTITION_TYPES = ['size',
                          'offset',
                          'guid',
                          'type_guid',
-                         'flags']
+                         'flags',
+                         'persist']
 
 BPT_VERSION_MAJOR = 1
 BPT_VERSION_MINOR = 0
@@ -231,6 +233,8 @@ class Partition(object):
     type_guid: Type GUID (RFC 4122 compliant) as a string or a known type
                from the |KNOWN_TYPE_GUIDS| map.
     flags: GUID flags.
+    persist: If true, sets bit 0 of flags indicating that this partition should
+             not be deleted by the bootloader.
     ab: If True, the partition is an A/B partition.
     ab_expanded: If True, the A/B partitions have been generated.
     ignore: If True, the partition should not be included in the final output.
@@ -246,6 +250,7 @@ class Partition(object):
     self.guid = None
     self.type_guid = None
     self.flags = 0
+    self.persist = False
     self.ab = False
     self.ab_expanded = False
     self.ignore = False
@@ -287,6 +292,11 @@ class Partition(object):
     value = pobj.get(JSON_KEYWORD_PARTITIONS_FLAGS)
     if value is not None:
       self.flags = ParseNumber(value)
+    value = pobj.get(JSON_KEYWORD_PARTITIONS_PERSIST)
+    if value is not None:
+      self.persist = value
+      if value:
+        self.flags = self.flags | 0x1
     value = pobj.get(JSON_KEYWORD_PARTITIONS_POSITION)
     if value is not None:
       self.position = ParseNumber(value)
@@ -508,6 +518,7 @@ class Bpt(object):
               '      "' + JSON_KEYWORD_PARTITIONS_GUID + '": "{}",\n'
               '      "' + JSON_KEYWORD_PARTITIONS_TYPE_GUID + '": "{}",\n'
               '      "' + JSON_KEYWORD_PARTITIONS_FLAGS + '": "{:#018x}",\n'
+              '      "' + JSON_KEYWORD_PARTITIONS_PERSIST + '": {},\n'
               '      "' + JSON_KEYWORD_PARTITIONS_IGNORE + '": {},\n'
               '      "' + JSON_KEYWORD_PARTITIONS_AB + '": {},\n'
               '      "' + JSON_KEYWORD_PARTITIONS_AB_EXPANDED + '": {},\n'
@@ -519,6 +530,7 @@ class Bpt(object):
                                    p.guid,
                                    p.type_guid,
                                    p.flags,
+                                   'true' if p.persist else 'false',
                                    'true' if p.ignore else 'false',
                                    'true' if p.ab else 'false',
                                    'true' if p.ab_expanded else 'false',
