@@ -322,6 +322,12 @@ class MakeTableTest(unittest.TestCase):
                     disk_size=bpttool.ParseSize('10 GiB'),
                     disk_guid='01234567-89ab-cdef-0123-00000000002a')
 
+  def testPersist(self):
+    """Checks that persist flags are generated"""
+    self._MakeTable(['test/persist.bpt'],
+                    'test/expected_json_persist.bpt',
+                    disk_size=bpttool.ParseSize('10 GiB'))
+
   def testSuffixes(self):
     """Checks that A/B-suffixes can be changed on the command-line."""
     self._MakeTable(['test/base.bpt'],
@@ -458,6 +464,20 @@ class QueryPartitionTest(unittest.TestCase):
             open('test/expected_json_stacked_change_flags.bpt'),
             'userdata', 'flags', False),
         '0x0420000000000000')
+
+  def testQueryPersistTrue(self):
+    """Checks query for persist."""
+    self.assertEqual(
+        self.bpt.query_partition(
+            open('test/persist.bpt'),
+            'true_persist', 'persist', False), 'True')
+
+  def testQueryPersistFalse(self):
+    """Checks query for persist."""
+    self.assertEqual(
+        self.bpt.query_partition(
+            open('test/persist.bpt'),
+            'false_persist', 'persist', False), 'False')
 
   def testQuerySizeCollapse(self):
     """Checks query for size when collapsing A/B partitions."""

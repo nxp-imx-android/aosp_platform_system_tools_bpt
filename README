@@ -113,6 +113,10 @@ well-known key/value pairs:
  flags:       A 64-bit integer (decimal or hexadecimal representations are
               accepted) for GPT flags. Default value is 0.
 
+ persist:     If 'true', the parition will be marked persistant. This will
+              set bit 0 of flags to 1. This will OR with the value of
+              'flags'.
+
  ignore:      If 'true', the partition will not be included in the final
               output.
 
