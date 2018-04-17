@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 # Copyright 2016, The Android Open Source Project
 #
@@ -28,6 +28,10 @@ import sys
 import uuid
 import zlib
 
+# Python 2.6 required for modern exception syntax
+if sys.hexversion < 0x02060000:
+  print >> sys.stderr, "Python 2.6 or newer is required."
+  sys.exit(1)
 
 # Keywords used in JSON files.
 JSON_KEYWORD_SETTINGS = 'settings'
