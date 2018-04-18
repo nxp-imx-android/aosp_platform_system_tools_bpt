@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 # Copyright 2016, The Android Open Source Project
 #
@@ -30,6 +30,10 @@ import sys
 import uuid
 import zlib
 
+# Python 2.6 required for modern exception syntax
+if sys.hexversion < 0x02060000:
+  print >> sys.stderr, "Python 2.6 or newer is required."
+  sys.exit(1)
 
 # Keywords used in JSON files.
 JSON_KEYWORD_SETTINGS = 'settings'
@@ -46,6 +50,7 @@ JSON_KEYWORD_PARTITIONS_GROW = 'grow'
 JSON_KEYWORD_PARTITIONS_GUID = 'guid'
 JSON_KEYWORD_PARTITIONS_TYPE_GUID = 'type_guid'
 JSON_KEYWORD_PARTITIONS_FLAGS = 'flags'
+JSON_KEYWORD_PARTITIONS_PERSIST = 'persist'
 JSON_KEYWORD_PARTITIONS_IGNORE = 'ignore'
 JSON_KEYWORD_PARTITIONS_AB = 'ab'
 JSON_KEYWORD_PARTITIONS_AB_EXPANDED = 'ab_expanded'
@@ -58,7 +63,8 @@ QUERY_PARTITION_TYPES = ['size',
                          'offset',
                          'guid',
                          'type_guid',
-                         'flags']
+                         'flags',
+                         'persist']
 
 BPT_VERSION_MAJOR = 1
 BPT_VERSION_MINOR = 0
@@ -72,6 +78,7 @@ GPT_MAX_PART_NUM = 128
 
 KNOWN_TYPE_GUIDS = {
     'brillo_boot': 'bb499290-b57e-49f6-bf41-190386693794',
+    'brillo_bootloader': '4892aeb3-a45f-4c5f-875f-da3303c0795c',
     'brillo_system': '0f2778c4-5cc1-4300-8670-6c88b7e57ed6',
     'brillo_odm': 'e99d84d7-2c1b-44cf-8c58-effae2dc2558',
     'brillo_oem': 'aa3434b2-ddc3-4065-8b1a-18e99ea15cb7',
@@ -80,7 +87,8 @@ KNOWN_TYPE_GUIDS = {
     'brillo_vbmeta': 'b598858a-5fe3-418e-b8c4-824b41f4adfc',
     'brillo_vendor_specific': '314f99d5-b2bf-4883-8d03-e2f2ce507d6a',
     'linux_fs': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-    'ms_basic_data': 'ebd0a0a2-b9e5-4433-87c0-68b6b72699c7'
+    'ms_basic_data': 'ebd0a0a2-b9e5-4433-87c0-68b6b72699c7',
+    'efi_system': 'c12a7328-f81f-11d2-ba4b-00a0c93ec93b'
 }
 
 
@@ -698,6 +706,8 @@ class Partition(object):
     type_guid: Type GUID (RFC 4122 compliant) as a string or a known type
                from the |KNOWN_TYPE_GUIDS| map.
     flags: GUID flags.
+    persist: If true, sets bit 0 of flags indicating that this partition should
+             not be deleted by the bootloader.
     ab: If True, the partition is an A/B partition.
     ab_expanded: If True, the A/B partitions have been generated.
     ignore: If True, the partition should not be included in the final output.
@@ -713,6 +723,7 @@ class Partition(object):
     self.guid = None
     self.type_guid = None
     self.flags = 0
+    self.persist = False
     self.ab = False
     self.ab_expanded = False
     self.ignore = False
@@ -726,36 +737,41 @@ class Partition(object):
     """
     self.label = pobj[JSON_KEYWORD_PARTITIONS_LABEL]
     value = pobj.get(JSON_KEYWORD_PARTITIONS_OFFSET)
-    if value:
+    if value is not None:
       self.offset = ParseSize(value)
     value = pobj.get(JSON_KEYWORD_PARTITIONS_SIZE)
-    if value:
+    if value is not None:
       self.size = ParseSize(value)
     value = pobj.get(JSON_KEYWORD_PARTITIONS_GROW)
-    if value:
-      self.grow = True
+    if value is not None:
+      self.grow = value
     value = pobj.get(JSON_KEYWORD_PARTITIONS_AB)
-    if value:
+    if value is not None:
       self.ab = value
     value = pobj.get(JSON_KEYWORD_PARTITIONS_AB_EXPANDED)
-    if value:
+    if value is not None:
       self.ab_expanded = value
     value = pobj.get(JSON_KEYWORD_PARTITIONS_GUID)
-    if value:
+    if value is not None:
       self.guid = value
     value = pobj.get(JSON_KEYWORD_PARTITIONS_IGNORE)
-    if value:
+    if value is not None:
       self.ignore = value
     value = pobj.get(JSON_KEYWORD_PARTITIONS_TYPE_GUID)
-    if value:
+    if value is not None:
       self.type_guid = str.lower(str(value))
       if self.type_guid in KNOWN_TYPE_GUIDS:
         self.type_guid = KNOWN_TYPE_GUIDS[self.type_guid]
     value = pobj.get(JSON_KEYWORD_PARTITIONS_FLAGS)
-    if value:
+    if value is not None:
       self.flags = ParseNumber(value)
+    value = pobj.get(JSON_KEYWORD_PARTITIONS_PERSIST)
+    if value is not None:
+      self.persist = value
+      if value:
+        self.flags = self.flags | 0x1
     value = pobj.get(JSON_KEYWORD_PARTITIONS_POSITION)
-    if value:
+    if value is not None:
       self.position = ParseNumber(value)
 
   def expand_guid(self, guid_generator, partition_number):
@@ -975,6 +991,7 @@ class Bpt(object):
               '      "' + JSON_KEYWORD_PARTITIONS_GUID + '": "{}",\n'
               '      "' + JSON_KEYWORD_PARTITIONS_TYPE_GUID + '": "{}",\n'
               '      "' + JSON_KEYWORD_PARTITIONS_FLAGS + '": "{:#018x}",\n'
+              '      "' + JSON_KEYWORD_PARTITIONS_PERSIST + '": {},\n'
               '      "' + JSON_KEYWORD_PARTITIONS_IGNORE + '": {},\n'
               '      "' + JSON_KEYWORD_PARTITIONS_AB + '": {},\n'
               '      "' + JSON_KEYWORD_PARTITIONS_AB_EXPANDED + '": {},\n'
@@ -986,6 +1003,7 @@ class Bpt(object):
                                    p.guid,
                                    p.type_guid,
                                    p.flags,
+                                   'true' if p.persist else 'false',
                                    'true' if p.ignore else 'false',
                                    'true' if p.ab else 'false',
                                    'true' if p.ab_expanded else 'false',
